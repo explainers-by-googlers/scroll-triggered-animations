@@ -1,4 +1,8 @@
-## `AnimationTriggers` (as external to animations)
+# `AnimationTrigger`
+
+This is a proposal describing how `AnimationTrigger`s should work. It is written to aid discussion in CSS Working Group issue 
+[#12119](https://github.com/w3c/csswg-drafts/issues/12119) in fleshing out how `AnimationTrigger` can work in a model where it is 
+external to `Animation`.
 
 We can accomplish this by introducing explicit `Animation.enableTrigger()` and `Animation.disableTrigger()` APIs and 
 thinking of Triggers as invoking the existing [`play()`](https://drafts.csswg.org/web-animations-1/#play-an-animation),
@@ -6,56 +10,59 @@ thinking of Triggers as invoking the existing [`play()`](https://drafts.csswg.or
 [`reverse()`](https://drafts.csswg.org/web-animations-1/#reverse-an-animation) APIs (repeat triggers will have 
 to introduce a “reset” concept).
 
-AnimationTriggers have 4 states: `inactive`, `idle`, `normal` and `inverse`:
+So that authors have flexibility around assigning and updating an animation's trigger via script,
+the `Animation` interface's [`trigger`](https://drafts.csswg.org/web-animations/#dom-animation-trigger) field is not readonly. This means that multiple animations may be assigned the same trigger.
+However, we would not want the enabling or disabling of one animation's trigger to interfere with that of another animation.
+And so the enabling or disabling of a trigger is done on a per-Animation basis and the trigger state is tracked on a per-Animation 
+basis. This is why we have `Animation.enableTrigger` rather than `AnimationTrigger.enable`.
+To support this, each `Animation` needs to track its `TriggerState` where a `TriggerState` is an object that has one of 4 values:
 
 - `inactive`: the trigger does nothing, i.e. it cannot respond to its trigger conditions being met.
 - `idle`: the trigger is not inactive but its trigger conditions have not been met.
 - `normal`: the trigger is not inactive and the last of the trigger’s conditions to have been met is the trigger condition.
 - `inverse`: the trigger is not inactive and the last of the trigger’s conditions to have been met is the exit condition.
 
+Each `Animation` tracks its `TriggerState` via a `triggerState` field (which is not web-exposed).
+
 `Animation.enableTrigger()` does the following:
 - If the animation’s trigger is null, throw.
-- If its trigger's state is `inactive`:
-    - Set its trigger’s state to `idle`.
+- If its `triggerState` is `inactive`:
+    - Set its `triggerState` to `idle`.
     - If the animation’s [`playState`](https://drafts.csswg.org/web-animations-1/#dom-animation-playstate) is `idle` 
     and its [`animation-fill-mode`](https://drafts.csswg.org/css-animations/#animation-fill-mode) is `both | backwards`:
         - `pause()` the animation.
 
 `Animation.disableTrigger()` does the following:
 - If the animation’s trigger is null, throw.
-- If the animations's trigger’s state is not `inactive`:
-    - Set the animation's trigger’s state to `inactive`.
-
-Note: So that authors have flexibility around assigning and updating an animation's trigger via script,
-the `Animation` interface's `trigger` field is not readonly. This means that multiple animations may be assigned the same trigger.
-However, we would not want the enabling or disabling of one animation's trigger to interfere with that of another animation.
-And so the enabling or disabling of a trigger is done on a per-Animation basis and the trigger state is tracked on a per-Animation 
-basis. This is why we have `Animation.enableTrigger` rather than `AnimationTrigger.enable`. Subsequent references to the state of
-a trigger refer to state that is particular to only the relevant animation.
+- If the animations's `triggerState` is not `inactive`:
+    - Set the animation's triggerState to `inactive`.
 
 ### [Web Animations API](https://drafts.csswg.org/web-animations/) (WAAPI) Animations
 
 #### Default AnimationTrigger & Existing Animations
 
 A WAAPI `Animation`, by default, gets the default `AnimationTrigger` (whose timeline is the `document.timeline`). This 
-trigger is initially in the `inactive` state. As the trigger is in the `inactive` state it cannot `play()` the animation, so the animation 
-remains in the `idle` `playState` and has no visual effect, consistent with pre-AnimationTrigger WAAPI animations (aka existing 
-WAAPI animations). Calling `enableTrigger` on the animation (which can't happen for existing animations) will transition the trigger 
-from the `inactive` state to the `idle` state whereupon it will transition to the `normal` state and call `play()` on
-the animation. This automaitc transition to the `normal` state occurs because the `document.timeline` only produces values of time 
-and currently, the only valid conditions which `AnimationTrigger` works with are scroll position-based. So a non-`inactive` trigger 
-with a `document.timeline` immediately `play()`s and does not function any further.
+animation's `triggerState` is initially `inactive`. As the animation's `triggerState` is `inactive` its trigger cannot `play()` it, 
+so the animation remains in the `idle` `playState` and has no visual effect, consistent with pre-AnimationTrigger WAAPI animations 
+(aka existing WAAPI animations).
+
+##### enableTrigger with the default AnimationTrigger
+Calling `enableTrigger` on the animation (which can't happen for existing animations) will 
+transition the animation's `triggerState` from `inactive` to `idle` whereupon it will transition to `normal` and the trigger will 
+call `play()` on the animation. This automatic transition to `normal` `triggerState` occurs because the `document.timeline` only 
+produces values of time and currently, the only valid conditions which `AnimationTrigger` works with are scroll position-based. So 
+an animation with a non-`inactive` `triggerState` and a trigger with a `document.timeline` is immediately `play()`ed by its trigger 
+which does not function any further.
 
 #### A WAAPI Animation with an alternate AnimationTrigger:
 
-An alternate `AnimationTrigger` can be constructed and assigned to an Animations's `trigger` field. This alternate trigger is 
-initially in the `inactive` state and cannot `play()` the animation. Then, an author can call
-`Animation.enableTrigger()`, which moves animation's trigger from the `inactive` state to the `idle` state. When its trigger 
-condition is met, the trigger moves to the 
-`normal` state and calls `play()`. When its exit condition is met, it moves to the `inverse` state and calls `reverse()`.
-At any point in time, a developer can call `play()` or `pause()` on this animation and those would function just as before. A 
-developer can also call `cancel()` on this animation, and that would call `Animation.disableTrigger()` which puts the trigger back 
-into the `inactive` state.
+An alternate `AnimationTrigger` can be constructed and assigned to an `Animations`'s `trigger` field. As with the default case, the 
+animation's initial `triggerState` is `inactive` and its trigger cannot `play()` it. Then, an author can call
+`Animation.enableTrigger()`, which moves animation's `triggerState` from `inactive` to `idle`. When its trigger 
+condition is met, the animation's `triggerState` transitions to `normal`, causing the trigger to call `play()` on the animation. 
+When its exit condition is met, the animation's `triggerState` transitions to `inverse` and causing the trigger to call `reverse()` 
+on the animation. At any point in time, a developer can call `play()` or `pause()` on this animation and those would function just 
+as before. A developer can also call `cancel()` on this animation, and that would call `Animation.disableTrigger()` which puts the animation's `triggerState` back to `inactive`.
 
 An example of this put together in code:
 
@@ -109,17 +116,21 @@ animation should play in the reverse direction.
 
 #### Default AnimationTrigger & Existing CSS Animations
 
-When an author declares the [`animation`](https://developer.mozilla.org/en-US/docs/Web/CSS/animation) property on an element but not the `animation-trigger` property, that `Animation` gets the default trigger. This trigger is initially in the `inactive` 
-state. However, just as `play()` is currently automatically called for CSS animations but not for WAAPI animations, `Animation.enableTrigger` is called on the CSS animation, causing the animation to immediately `play()`, consistent with existing CSS 
-animations.
+When an author declares the [`animation`](https://developer.mozilla.org/en-US/docs/Web/CSS/animation) property on an element but not 
+the `animation-trigger` property, that `Animation` gets the default trigger. As with WAAPI animations, the animation's 
+`triggerState` is initially `inactive`. However, just as `play()` is currently automatically called for CSS animations but not for 
+WAAPI animations, `Animation.enableTrigger` is called on the CSS animation, causing the animation to immediately `play()`, 
+consistent with existing CSS animations. The animation `play()`s immediately for the same reasons as when `Animation.enableTrigger` 
+is [called on a WAAPI animation with the default `AnimationTrigger`](#enableTrigger-with-the-default-AnimationTrigger).
 
 #### CSS Animation with an alternate AnimationTrigger
 
 To create a CSS animation with an alternate `AnimationTrigger`, an author will declare the `animation-trigger` property with
 a `view()` or `scroll()` timeline, along with the `animation` property. As with the default case, `enableTrigger` is immediately 
-called on this animation, moving the trigger from the `inactive` state to the `idle` state. Now in the `idle` state, the trigger 
-will respond to its trigger condition being met by transitioning to the `normal` state and calling `play()` on the animation.
-If or when its exit condition is met, the trigger will transition to the `inverse` state and call
+called on this animation, moving the animation's `triggerState` from `inactive` to `idle`. Now in the `idle` `triggerState`, the 
+trigger will respond to its trigger condition being met by transitioning the animation's `triggerState` to `normal` and calling
+`play()` on the animation.
+If or when its exit condition is met, the trigger will transition the animation's `triggerState` to `inverse` and call
 `reverse()` causing the animation to play in the reverse direction.
 
 Here is sample CSS doing so:
@@ -159,9 +170,9 @@ repeat-type triggers will effectively perform `animation.currentTime = 0; animat
 
 ### `Animation.playState` & `Animation.currentTime`
 Giving `enableTrigger` the ability to call `pause()` will mean that `enableTrigger` will transition an animation from `idle` to 
-`paused` playState, depending on its `animation-fill-mode`. This doesn't seem problematic. In fact, it seems to be
+`paused` `playState`, depending on its `animation-fill-mode`. This doesn't seem problematic. In fact, it seems to be
 a better alternative to having an animation which is in `idle` playState while maintaining visual effect.
-Similarly, `enableTrigger` will change the `currentTime` of an animation from `null` to zero. These seem quite resonable
+Similarly, `enableTrigger` will change the `currentTime` of an animation from `null` to zero. These seem  resonable
 as they better reflect that the animation currently has a visual effect due to its `animation-fill-mode`.
 
 ### once-type `AnimationTriggers`
