@@ -19,15 +19,17 @@ The set of CSS properties for specifying AnimationTriggers are as follows:
 - animation-trigger-scope
 - timeline-trigger
   - timeline-trigger-name
-  - timeline-trigger-behavior
-  - timeline-trigger-timeline
-  - timeline-trigger-range-start
-  - timeline-trigger-range-end
+  - timeline-trigger-source
+  - timeline-trigger-entry-action
+  - timeline-trigger-entry-range-start
+  - timeline-trigger-entry-range-end
+  - timeline-trigger-exit-action
   - timeline-trigger-exit-range-start
   - timeline-trigger-exit-range-end
 - event-trigger
-  - event-trigger-behavior
-  - event-trigger-type
+  - event-trigger-name
+  - event-trigger-source
+  - event-trigger-action
 
 ## Longhand Descriptions
 
@@ -41,49 +43,42 @@ associated with an `animation-trigger` of the same name. For example:
 
 ```CSS
 .section {
-  timeline-trigger-name: --section-trigger;
+  timeline-trigger-name: --view-section-trigger;
 }
 
 .animatable {
   animation: ...;
-  animation-trigger: --section-trigger;
+  animation-trigger: --view-section-trigger;
 }
 ```
 
-### `timeline-trigger-behavior`
-`timeline-trigger-behavior` specifies how a trigger behaves during repeated
-occurrences of its trigger conditions. Valid values are:
+### `timeline-trigger-{entry, exit}-action`
+`timeline-trigger-entry-action` & `timeline-trigger-exit-action` specify what action a `timeline-trigger`
+should take on attached animations on entry and exit, respectively, of the specified ranges. Valid values are:
 
-- "once": The trigger plays the animation once and never again.
-- "repeat": The trigger plays the animation each time its entry condition is met
-and resets the animation each time its exit condition is met.
-- "alternate": The trigger plays the animation forward each time its entry
-condition is met and plays the animation in reverse each time its exit condition
-is met.
-- "state": The trigger plays the animation forward each time its entry
-condition is met and pauses the animation each time its exit condition is met.
+`play-forwards`, `play-backwards`, `play-alternate`, `pause`, `reset`, `replay`, `play`.
 
-### `timeline-trigger-timeline`
+### `timeline-trigger-source`
 This takes the same values as `animation-timeline` and specifies the
 [`AnimationTimeline`](https://drafts.csswg.org/css-animations-2/#animation-timeline)
 used to evaluate whether the trigger's conditions have been met.
 
-### `timeline-trigger-{exit-}range-{start, end}`
-`timeline-trigger-range-start` and `timeline-trigger-range-end` define a
-scroll-based trigger's "entry" range.
+### `timeline-trigger-{exit, entry}-range-{start, end}`
+`timeline-trigger-entry-range-start` and `timeline-trigger-entry-range-end` define a
+timeline-based trigger's "entry" range.
 
 `timeline-trigger-exit-range-start` and `timeline-trigger-exit-range-end` define
-a scroll-based trigger's "exit" range.
+a timeline-based trigger's "exit" range.
 
 These 4 properties take the same values as
 [`animation-range-{start, end}`](https://drafts.csswg.org/scroll-animations/#animation-range).
 
 #### Why have an "exit range" distinct from the "entry range"?
 
-A scroll-based trigger's entry condition is met when the corresponding scroll
-container's scroll offset is within the specified entry range. However, a
-scroll-based trigger's exit condition is met when said scroll container's
-scroll offset is *outside* the exit range.
+A timeline-based trigger's entry condition is met when the timeline's "current time" value
+is within the range corresponding to the trigger's specified entry range. However, a
+timeline-based trigger's exit condition is met when said timeline's current time is *outside* the
+exit range.
 
 In many cases, authors will want to have the same values for both ranges, but in
 some cases, it is useful to have different values. An example is with a
@@ -113,10 +108,13 @@ situation below:
 
 Here, the reset does not happen until the element is completely out of view.
 
-### `event-trigger-behavior`
-Mostly similar to `timeline-trigger-behavior`.
+### `event-trigger-name`
+Mostly similar to `timeline-trigger-name`.
 
-### `event-trigger-type`
+### `event-trigger-action`
+Mostly similar to `timeline-trigger-action`.
+
+### `event-trigger-source`
 This specifies which events trigger the playing, pausing, etc of the associated
 animation. Examples are `click`, `touch`, etc.
 
@@ -134,13 +132,17 @@ to any trigger with a matching name (within the relevant scope).
 The following is an example in which an animation is attached to two scroll-based triggers:
 
 ```CSS
-#viewtarget1, #viewtarget2 {
-  timeline-trigger: --trigger view() repeat contain 0% contain 100%;
+#viewtarget1 {
+  timeline-trigger: --trigger1 view() contain play-forwards play-backwards;
+}
+
+#viewtarget2 {
+  timeline-trigger: --trigger2 view() contain play-forwards play-backwards;
 }
 
 #animatable {
   animation: ...;
-  animation-trigger: --trigger;
+  animation-trigger: --trigger1 --trigger2;
 }
 ```
 
@@ -161,48 +163,144 @@ When either `viewtarget1` or `viewtarget2` is scrolled into view, the animation 
 Here is a click-based example:
 
 ```CSS
-#clicktarget1, #clicktarget2 {
-  event-trigger: --trigger event(click) repeat;
+#clicktarget1 {
+  event-trigger: --trigger1 click play;
+}
+#clicktarget2 {
+  event-trigger: --trigger2 event(click) repeat;
 }
 
 #animatable {
   animation: ...;
-  animation-trigger: --trigger;
+  animation-trigger: --trigger1 --trigger2;
 }
 ```
 
 and in HTML:
 
 ```HTML
-<div id="viewtarget1"></div>
+<div id="clicktarget1"></div>
 <div>Lots of other content.</div>
-<div id="viewtarget2"></div>
+<div id="clicktarget2"></div>
 
 <div id="animatable"></div>
 ```
 
-When either `viewtarget1` or `viewtarget2` is clicked the animation on `animatable`
-is played.
+When either `clicktarget1` or `clicktarget2` is clicked the animation on
+`animatable` is played.
 
-## Why not just a single animation-trigger shorthand?
-An AnimationTrigger might be scroll-based or event-based. Some of the CSS
-properties required for scroll-based triggers are not relevent for event-based
-triggers. Similarly, some properties for event-based triggers are not relevant
-for scroll-based triggers. As such, it seems the natural and clean thing to do to
-create separate CSS property "namespaces" for these properties. It would also work
-well with hypothetical future types of triggers.
 
-## Why event- & timeline- behaviors and not just animation-trigger-behavior?
-This allows space-separated declarations of multiple triggers on an animation.
-It seems unlikely that authors will want different behaviors for triggers that
-are otherwise identical. But if they do, they can still do so with, for example:
+More Examples:
+
+### `event-trigger` Examples
+
+“Play when clicked”
+
 ```CSS
-section {
-  timeline-trigger: --t1 once ..., --t2 alternate <same as previous>;
+.source {
+  event-trigger-name: --play-on-click;
+  event-trigger-source: click;
+  event-trigger-actions: play;
+}
+.shorthand {
+  event-trigger: --play-on-click click play;
 }
 
-.animatable {
-  animation: ...;
-  animation-trigger: --t1 --t2;
+@keyframes glow { 0%: {..} 50%: {..} 100%: {..} }
+
+.target {
+  animation: glow linear 1s;
+  animation-trigger: --play-on-click;
+}
+```
+
+“Play when clicked, paused when double-clicked”
+```CSS
+.source {
+  event-trigger-name: --play-on-click, --pause-on-double-click;
+  event-trigger-source: click, dblclick;
+  event-trigger-actions: play, pause;
+}
+.source-shorthand {
+  event-trigger: --play-on-click click play, --pause-on-double-click dbl-click pause;
+}
+
+@keyframes glow {
+  0%: {}
+  50%: {}
+  100%: {}
+}
+
+.target {
+  animation: glow linear 1s;
+  animation-trigger: --play-on-click --pause-on-dblclick;
+}
+
+```
+
+Alternatively, configuring a single `event-trigger` to respond to multiple events:
+
+```CSS
+.source {
+  event-trigger-name: --click-ctrl;
+  event-trigger-source: click dblclick;
+  event-trigger-actions: play pause;
+}
+.source-shorthand {
+  event-trigger: --click-ctrl click play dblclick pause;
+}
+
+@keyframes glow {
+  0%: {}
+  50%: {}
+  100%: {}
+}
+
+.target {
+  animation: glow linear 1s;
+  animation-trigger: --click-ctrl;
+}
+```
+
+### `timeline-trigger` Examples
+
+“Play on entry, reverse on exit”
+
+```CSS
+.source {
+  timeline-trigger-name: --view-alternate-trigger;
+  timeline-trigger-source: view();
+  timeline-trigger-entry-range: contain;
+  timeline-trigger-entry-action: play-forwards;
+  timeline-trigger-exit-action: play-backwards;
+ }
+
+.source-shorthand {
+  timeline-trigger: --view-alternate-trigger view() contain play-forwards play-backwards;
+}
+
+.target {
+  animation-trigger: --view-alternate-trigger;
+}
+```
+
+“Play on entry, reset on exit”
+
+```CSS
+.source {
+  timeline-trigger-name: --view-repeat-trigger;
+  timeline-trigger-source: view();
+  timeline-trigger-entry-range: contain;
+  timeline-trigger-entry-range: cover;
+  timeline-trigger-entry-action: play-forwards;
+  timeline-trigger-exit-action: reset;
+ }
+
+.source-shorthand {
+  timeline-trigger: --view-alternate-trigger view() contain play-forwards play-backwards;
+}
+
+.target {
+  animation-trigger: --view-alternate-trigger;
 }
 ```
