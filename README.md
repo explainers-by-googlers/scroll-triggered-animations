@@ -34,6 +34,7 @@ reference. Look for [brackets].
   - [Section Slide-In](#section-slide-in)
   - [Animating Gallery](#animating-gallery)
 - [Proposed Solution](#proposed-solution)
+  - [Example](#example)
   <!--
   - [How this solution would solve the use cases](#how-this-solution-would-solve-the-use-cases)
     - [Use case 1](#use-case-1-1)
@@ -186,6 +187,7 @@ the trigger will evaluate whether its trigger or exit conditions have been met.
 `timeline-trigger-range-*` specify the boundaries of the `timeline-trigger-source` that define the
 trigger's "enter" and "exit" conditions.
 
+### Example 
 
 Here is an example of HTML & CSS that could be used to implement the Section Slide-In example
 described above.
